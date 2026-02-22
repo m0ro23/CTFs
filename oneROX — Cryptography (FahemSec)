@@ -1,0 +1,69 @@
+oneROX — Cryptography
+
+Challenge Information
+
+Name: oneROX
+
+Category: Cryptography
+
+Points: 100
+
+Flag Format: FahemSec{...}
+
+The challenge provides a hexadecimal string encrypted using XOR.
+
+Challenge Data
+
+Ciphertext (hex):
+
+63425948170d6b4c4548407e484e561515181a1a1b1f4c4e1a4c48494f494f4e1e1449481a1a484c1a1d1a181518155027
+Initial Analysis
+
+The challenge name oneROX strongly suggests a single-byte XOR cipher.
+
+Additionally, the known flag format FahemSec{ provides a clear opportunity for a known-plaintext attack, which is very effective against XOR-based encryption.
+
+Understanding the Cipher
+
+XOR encryption works as follows:
+
+Ciphertext = Plaintext XOR Key
+Plaintext  = Ciphertext XOR Key
+
+Because XOR is reversible, applying the same key again recovers the plaintext.
+If the same single byte is used repeatedly, brute-forcing all 256 possibilities is trivial.
+
+Solution Approach
+1. Convert Hex to Bytes
+
+The hex string is converted into raw bytes to prepare it for XOR operations.
+
+2. Known-Plaintext Attack
+
+Using the known prefix:
+
+FahemSec{
+
+Each ciphertext byte is XORed with the corresponding plaintext byte to recover the key.
+
+This process consistently revealed the same byte value.
+
+3. Key Discovery
+
+The recovered XOR key is:
+
+0x2d
+
+Decimal: 45
+ASCII: -
+
+4. Full Decryption
+
+XORing the entire ciphertext with 0x2d produces readable plaintext.
+
+Decryption Result
+
+The decrypted message is: FahemSec{8857762ac7aedbdbc39de77ea7075858}
+
+Final Flag
+FahemSec{8857762ac7aedbdbc39de77ea7075858}
