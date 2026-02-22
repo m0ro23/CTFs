@@ -1,0 +1,73 @@
+Biscuits — Web
+
+Challenge Description
+
+The application consists of a simple webpage with a FahemSec logo and a button labeled Access Flag, which redirects to /flag.php.
+
+Accessing /flag.php directly returns one of the following responses:
+
+No session cookie found. Please visit the home page first.
+
+Access Denied! You are not admin.
+
+The challenge title “Biscuits” hints that the solution involves cookies.
+
+Initial Analysis
+
+Inspecting cookies after visiting the homepage reveals:
+
+PHPSESSID=...
+admin=eyJ1c2VyIjoidW5hdXRoZW50aWNhdGVkIiwidmlzaXQiOjU1NjB9
+
+Decoding the admin cookie from Base64:
+
+{
+  "user": "unauthenticated",
+  "visit": 5560
+}
+
+This indicates that authorization state is stored client-side in a JSON-based cookie.
+
+Vulnerability
+
+The server logic:
+
+Decodes the admin cookie from Base64
+
+Parses the value as JSON
+
+Reads the user field
+
+Grants access if user == "admin"
+
+There is no signature, encryption, HMAC, or integrity validation, allowing client-side cookie tampering.
+
+Exploitation
+
+Modify the admin cookie to contain an admin user.
+
+Payload
+{
+  "user": "admin"
+}
+
+Base64-encoded:
+
+eyJ1c2VyIjoiYWRtaW4ifQ==
+Steps
+
+Open browser Developer Tools
+
+Navigate to Application → Cookies
+
+Edit the admin cookie value
+
+Replace it with the crafted Base64 payload
+
+Refresh the page or access /flag.php
+
+Result
+
+The flag is displayed:
+
+FahemSec{b1scu1t5_4r3_ju5t_c00k135_r1gh7?}
