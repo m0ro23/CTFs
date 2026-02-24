@@ -1,0 +1,44 @@
+Blue Inc — Web Challenge Writeup
+
+Challenge Description
+
+Blue Inc is a demo social media website still under construction.
+User registration is not yet implemented, but the application provides demo credentials for visitors:
+
+Username: demo
+Password: demo
+
+Initial Access
+
+Using the provided credentials, we log in successfully as the demo user and are redirected to the profile page.
+
+Example:
+
+/profile.php?user=demo
+
+The page displays basic user information without any access restrictions.
+
+Vulnerability Identification
+
+While inspecting the profile URL, we notice that the username is controlled entirely via a GET parameter:
+
+profile.php?user=demo
+
+There is no server-side authorization check to verify whether the logged-in user is allowed to view the requested profile.
+
+This indicates an Insecure Direct Object Reference (IDOR) vulnerability.
+
+Exploitation
+
+To test this, we manually modify the user parameter in the URL from demo to admin:
+
+http://cdcamxwl32pue3e6mekgvdm0h9vrq873o8mombwzy-web.cybertalentslabs.com/profile.php?user=admin
+
+Result
+
+The application loads the admin profile page without any authentication or privilege validation.
+
+The flag is displayed directly on the admin profile page.
+
+Flag
+15716a249064f7e9684a816dcdb05282
