@@ -1,0 +1,158 @@
+Spicy Challenge — CyCTF 
+
+Summary
+
+This challenge was solved by exploiting a TOCTOU (Time-Of-Check to Time-Of-Use) race condition in a privileged backup script.
+The script validated file paths first and later copied them as root. By changing what a validated pathname pointed to between those two phases, it was possible to trick the privileged copy operation into archiving a protected file from /root. After a successful race, the resulting archive contained the flag.
+
+Reconnaissance
+
+Running:
+
+sudo -l
+
+revealed that the current user could execute:
+
+/usr/local/bin/backup_configs.sh
+
+as root without a password.
+
+Reviewing the script showed two clearly separated phases:
+
+Validation phase
+
+Reads a list of file paths
+
+Checks that each path:
+
+Exists
+
+Is a regular file (-f)
+
+Is not a symlink
+
+Matches allowed extensions
+
+Creates a temporary directory
+
+Copies each previously validated path into it using cp
+
+Archives the directory using tar
+
+This separation between validation and copying is a classic TOCTOU pattern.
+
+Key Observation
+
+The script validates file paths first, but later reuses the same pathnames when copying files as root.
+If the file a pathname refers to can be changed after validation but before copying, the copy phase may operate on a completely different file than the one that was checked.
+
+Attack Concept
+
+The goal was to ensure:
+
+The validation phase always succeeds
+
+The copy phase sometimes reads a protected file
+
+This was achieved using a proxy path combined with atomic directory-entry swaps.
+
+High-level idea
+
+Provide the script with:
+
+A stable, benign file (always valid)
+
+A proxy path that can be swapped atomically
+
+During validation, the proxy path always points to a benign regular file
+
+During the privileged copy phase, the proxy path may temporarily point to the protected target (e.g., /root/flag)
+
+If the timing aligns, root copies the protected file into the archive
+
+Why Atomic Swaps Are Required
+
+Naive approaches like deleting a file and recreating it as a symlink failed because:
+
+There is a brief moment where the file does not exist
+
+If validation encounters a missing file, the script aborts
+
+To avoid this, the exploit must ensure the proxy filename always exists.
+This requires atomic directory-entry exchange operations, which replace one directory entry with another instantly, without an intermediate missing state.
+
+Tools and Constraints
+
+No compiler available
+
+Python was unreliable or unavailable
+
+Perl was available and sufficient
+
+/usr/local/bin was not writable, so PATH hijacking was not possible
+
+The solution relied entirely on user-space tools and atomic filesystem operations.
+
+Exploitation Steps (High-Level)
+
+Prepare an input list for the backup script containing:
+
+A stable benign file
+
+A proxy file located in a writable directory
+
+Initially create:
+
+The proxy as a regular benign file
+
+A separate filesystem entry pointing to the protected target (e.g., a symlink to /root/flag)
+
+Run a tight user-space loop that repeatedly atomically swaps:
+
+The proxy filename
+
+The privileged pointer entry
+
+This guarantees:
+
+Validation always sees a valid regular file
+
+Copy phase may follow the swapped entry to the protected file
+
+Repeatedly execute the privileged backup script.
+
+After each run, inspect the produced archive:
+
+If the proxy file content differs from the benign file, the race succeeded
+
+Extract the proxy file from the archive and read the flag.
+
+Reliability Considerations
+
+The atomic swap prevents validation failures caused by missing files
+
+Repeated execution increases the chance of winning the race
+
+In a CTF environment, this approach becomes highly reliable after tuning timing
+
+Why Other Attempts Failed
+
+rm + ln -s toggling: failed due to transient missing-file windows
+
+Hard links: not possible due to permission restrictions
+
+PATH hijacking: ineffective because the script used absolute paths
+
+Direct file ↔ symlink swaps: unreliable due to kernel behavior
+
+The proxy + atomic exchange method avoided all these pitfalls.
+
+Post-Exploitation Verification
+
+Once a non-benign proxy file appeared in an archive:
+
+The archive was extracted
+
+The proxy file was read
+
+The contents contained the flag from /root
