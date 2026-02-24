@@ -1,0 +1,111 @@
+click_me — Web Challenge
+
+Challenge Description
+
+The challenge presents a webpage containing a single button labeled “Click Me”.
+Clicking the button redirects the user to another page with the same layout but a different URL path consisting of a 32-character hexadecimal string.
+
+Example path:
+
+/a04adb225ce0e3f2732efa132137ee0b
+
+Each page contains exactly one link to the next hash, forming a long redirection chain.
+
+The objective is to reach the end of the chain and retrieve the flag.
+
+Initial Analysis
+
+No input fields, parameters, or authentication
+
+No visible client-side logic or JavaScript manipulation
+
+No traditional vulnerabilities (SQLi, XSS, SSTI, LFI, etc.)
+
+Each page returns static HTML with a single anchor tag:
+
+<a href="/<32_hex>">Click Me</a>
+
+The chain length is intentionally large (hundreds to thousands of steps), making manual traversal impractical.
+
+This confirms the challenge is automation-based, not vulnerability-based.
+
+Intended Solution
+
+The intended approach is to automate HTTP requests, recursively following each hash until the flag is discovered.
+
+Key requirements:
+
+Extract the next hash from each response
+
+Track visited hashes to avoid loops
+
+Detect the flag in page content or terminal responses (e.g., 404)
+
+Exploitation Strategy
+
+Open the initial page and extract the first hash
+
+Send an HTTP GET request to /hash
+
+Parse the response for:
+
+The next hash (href="/[0-9a-f]{32}")
+
+A flag pattern (flag{} or Flag{})
+
+Repeat until the flag is found or the chain ends
+
+Implementation
+
+Asynchronous Traversal 
+
+Asynchronous requests significantly reduce execution time and prevent instance expiration.
+
+import aiohttp
+import asyncio
+import re
+
+async def traverse(start_hash, base_url):
+    visited = set()
+    current = start_hash
+    step = 0
+
+    async with aiohttp.ClientSession() as session:
+        while current not in visited:
+            visited.add(current)
+            step += 1
+            url = f"{base_url}/{current}"
+            print(f"[{step}] {url}")
+
+            async with session.get(url, timeout=5) as resp:
+                text = await resp.text()
+
+                flag = re.search(r'(?:flag|Flag)\{[^}]+\}', text, re.I)
+                if flag:
+                    print("\n[+] FLAG FOUND")
+                    print(flag.group(0))
+                    return
+
+                nxt = re.search(r'href="/([0-9a-f]{32})"', text)
+                if not nxt:
+                    print("[!] Chain terminated")
+                    return
+
+                current = nxt.group(1)
+
+asyncio.run(traverse(
+    "8d13cf4dfa0921c32dbb9542c97867ee",
+    "http://<instance>.cybertalentslabs.com"
+))
+
+Dependency:
+
+pip install aiohttp
+
+Results
+
+Pages Traversed: 1000
+
+Termination Condition: Final page contained flag
+
+Flag{QCFAbohUInbDNrK316bXk3cFJKdTVBWwhwMHJsZ0xQVIVk1tDU4eFBVRT0yOGISYjEwMjA4ZjQ2YVj}
