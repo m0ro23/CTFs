@@ -1,0 +1,181 @@
+Broken Pyton
+
+Category: Secure Coding
+
+Objective:
+
+Analyze a SUID C program embedding a Python interpreter, identify vulnerabilities, fix them, and retrieve the flag.
+
+Challenge Files: /challenge/src contains program.c and supporting files.
+
+Hints from Challenge Name:
+
+“Broken Pyton” indicates Python is integrated incorrectly or privilege management is flawed.
+
+Step 1: Program Overview
+
+The program performs the following:
+
+Argument Parsing:
+
+Optional --no_drop flag
+
+Optional Python code as CLI argument
+
+Optional --help
+
+Privilege Detection:
+
+Retrieves real UID (RUID) and effective UID (EUID)
+
+Prints both for debugging
+
+Privilege Dropping (Vulnerable):
+
+Checks if ruid != euid
+
+Drops privileges conditionally with seteuid()
+
+Allows bypass using --no_drop
+
+Python Interpreter Integration:
+
+Initializes Python (Py_Initialize)
+
+Executes Python code if provided, else REPL
+
+Exit:
+
+Finalizes Python (Py_Finalize)
+
+Returns 0
+
+Step 2: Critical Sections of the Original Code
+2.1 Argument Parsing
+for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--no_drop") == 0) {
+        no_drop = 1;
+    } else if (strcmp(argv[i], "--help") == 0) {
+        print_usage(argv[0]);
+        return 0;
+    } else {
+        python_code = argv[i];
+    }
+}
+
+Issues:
+
+--no_drop allows bypass of privilege drop.
+
+python_code can be arbitrary Python code.
+
+Risk: Users can run Python as root.
+
+2.2 Privilege Detection & Dropping (Vulnerable)
+ruid = getuid();
+euid = geteuid();
+
+printf("Real UID: %d\n", ruid);
+printf("Effective UID: %d\n", euid);
+
+if (ruid != euid) {
+    if (no_drop) {
+        printf("SUID detected! --no_drop used, privileges kept.\n");
+    } else {
+        printf("SUID detected! Dropping privileges...\n");
+        if (seteuid(ruid) == -1) {
+            perror("seteuid failed");
+            exit(1);
+        }
+        printf("Effective UID is now: %d\n", geteuid());
+    }
+}
+
+Vulnerabilities:
+
+seteuid() only drops EUID, leaving saved UID intact → reversible.
+
+--no_drop bypass allows full root access.
+
+Exploit Example:
+
+import os
+os.seteuid(0)  # Re-escalates to root
+print(open('/flag.txt').read())
+2.3 Python Execution
+Py_Initialize();
+
+if (!Py_IsInitialized()) {
+    fprintf(stderr, "Failed to initialize Python interpreter\n");
+    exit(1);
+}
+
+if (python_code != NULL) {
+    execute_python_code(python_code);
+} else {
+    interactive_repl();
+}
+
+Py_Finalize();
+
+Observation:
+
+Python runs with current EUID.
+
+If EUID is root due to above vulnerabilities, Python can access /flag.txt and system files.
+
+2.4 Execute Python Function
+void execute_python_code(const char *code) {
+    PyObject *main_module = PyImport_AddModule("__main__");
+    PyObject *main_dict = PyModule_GetDict(main_module);
+    PyObject *result = PyRun_String(code, Py_single_input, main_dict, main_dict);
+    if (result == NULL) PyErr_Print();
+    else Py_DECREF(result);
+}
+
+Observation:
+
+Executes any Python code in the context of the process EUID.
+
+Combined with seteuid() vulnerability → full root shell possible.
+
+2.5 Interactive REPL
+void interactive_repl() {
+    char line[1024];
+    PyObject *main_module = PyImport_AddModule("__main__");
+    PyObject *main_dict = PyModule_GetDict(main_module);
+    
+    printf(">>> ");
+    while (fgets(line, sizeof(line), stdin) != NULL) {
+        line[strcspn(line, "\n")] = 0;
+        if (strcmp(line, "exit()") == 0 || strcmp(line, "quit()") == 0) break;
+        if (strlen(line) == 0) { printf(">>> "); continue; }
+        
+        PyObject *result = PyRun_String(line, Py_single_input, main_dict, main_dict);
+        if (result == NULL) PyErr_Print();
+        else Py_DECREF(result);
+        printf(">>> ");
+    }
+}
+
+Observation:
+
+Untrusted Python code can escalate privileges if EUID not dropped properly.
+
+REPL cannot exit privilege escalation risk if SUID mishandled.
+
+Step 3: Secure Fix
+3.1 Remove --no_drop Logic
+// BEFORE (vulnerable)
+if (no_drop) { ... }
+
+// AFTER (secure)
+printf("SUID detected! Dropping privileges before Python execution...\n");
+3.2 Use setuid() Instead of seteuid()
+if (setuid(ruid) == -1) {
+    perror("setuid failed");
+    exit(1);
+}
+printf("Effective UID is now: %d\n", geteuid());
+
+Flag{pr1v1l3g3_dr0pp1ng_1s_cr1t1c4l_f0r_su1d_b1n4r13s}
