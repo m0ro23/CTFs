@@ -1,0 +1,47 @@
+News Leak
+
+Description
+
+A news platform where the admin appears to be hiding sensitive information.
+
+Initial Exploration
+
+The site displays articles such as:
+
+/article.php?articleid=1
+
+Testing invalid parameters produces database-related errors, indicating MongoDB usage.
+
+Login Bypass (NoSQL Injection)
+
+Login request was vulnerable to NoSQL injection.
+
+Payload used:
+
+username[$ne]=aaaa&password[$ne]=bbbb
+
+This bypasses authentication and returns a valid session cookie.
+
+Privilege Escalation
+
+After login:
+
+Comment functionality becomes available
+
+Admin-only functionality is suspected
+
+Testing revealed:
+
+/admin.php
+
+The admin login is vulnerable to the same NoSQL injection.
+
+Admin Access
+
+Using NoSQL injection again:
+
+Admin session cookie is obtained
+
+Access to /admin.php is granted
+
+Although the page appears empty, inspecting the raw HTTP response reveals the flag stored in cookies.
