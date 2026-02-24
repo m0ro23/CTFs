@@ -1,0 +1,83 @@
+Inception
+
+Description
+
+“You’re waiting for a train. A train that will take you far away.”
+
+This is a white-box challenge. The source code of the Flask application is provided.
+
+Initial Analysis
+
+The application includes an internal endpoint:
+
+@app.route('/internal/flag')
+def get_internal_flag():
+    if request.remote_addr != '127.0.0.1':
+        return "Forbidden", 403
+    return "flag{Dummy_flag_dont_submit}", 200
+
+The flag is only accessible from localhost (127.0.0.1).
+
+The /check endpoint allows users to submit a URL, which the server fetches using a custom redirect handler.
+
+Vulnerable Logic
+
+The key vulnerability lies in how redirects are handled.
+
+custom_fetch() behavior:
+
+Redirects are handled manually
+
+allow_redirects=False
+
+Maximum redirects: 10
+
+If exceeded, a TooManyRedirectsError is raised
+
+Error handling flaw:
+
+When an exception occurs, the application does the following:
+
+last_url = str(e).split("Last URL was: ")[1]
+final_attempt = requests.get(last_url, timeout=2)
+
+This second requests.get():
+
+Uses default behavior
+
+Allows redirects
+
+Fetches the last_url without restrictions
+
+This creates an SSRF via redirect chaining.
+
+Exploitation Strategy
+
+Trigger a redirect loop exceeding 10 redirects
+
+Control the final URL included in the exception message
+
+Force the second request to follow redirects to:
+
+http://127.0.0.1:8000/internal/flag
+Exploit Implementation
+
+A PHP script was written and hosted externally. The script:
+
+Redirects to itself 10 times
+
+On the final redirect, points to /internal/flag
+
+When submitted to /check, the backend:
+
+Hits redirect limit
+
+Extracts the final URL
+
+Performs a new unrestricted request
+
+Fetches the internal flag endpoint
+
+Result
+
+The server fetches the internal endpoint on behalf of the attacker and returns the flag.
