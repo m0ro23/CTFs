@@ -1,0 +1,214 @@
+CyCTF25 – I Hate Tasks 
+
+Challenge Overview
+
+Category: Web
+
+Backend: Node.js (Express.js) + SQLite
+
+The target is a web application that allows users to create and manage tasks. Users can add tasks and mark them as completed or incomplete.
+
+Because this is a white-box challenge, we are given access to the source code and can analyze the application logic directly.
+
+Initial Observations
+
+On application startup:
+
+The backend creates an administrator account with a random username and password.
+
+The flag is stored inside a task belonging to the admin user.
+
+This immediately tells us:
+
+Our goal is to impersonate or gain access to the admin user’s session.
+
+Once authenticated as admin, retrieving tasks will reveal the flag.
+
+Application Structure
+
+The backend consists of:
+
+An authentication router (auth)
+
+A tasks router (tasks)
+
+An additional /visit route that simulates an admin login
+
+The application uses Express Session for session management.
+
+Authentication Logic Review
+Register Route
+
+Properly validates input types
+
+Creates a user securely
+
+Sets session variables:
+
+loggedUser: username
+
+authenticated: boolean flag
+
+Login Route
+
+Works similarly to register
+
+Sets the same session variables
+
+Logout Route
+
+Destroys the session correctly
+
+At this point, authentication logic looks solid and not directly exploitable.
+
+Tasks Router Analysis
+
+The tasks router contains several critical implementation flaws.
+
+Key Components
+
+A blacklist array called excludedFields, containing dangerous keys such as __proto__
+
+A _Task class responsible for:
+
+Fetching tasks
+
+Updating tasks
+
+Saving tasks
+
+Critical Issue: Unsafe Object Binding
+
+The application dynamically assigns user-controlled fields into objects using key-value iteration. This creates a Server-Side Prototype Pollution vulnerability.
+
+Although a blacklist exists, its implementation is flawed.
+
+Identified Vulnerabilities
+1. Mass Assignment
+
+User input is blindly assigned to task objects.
+
+2. Arbitrary task_id Usage
+
+The PATCH route:
+
+Takes task_id from the URL
+
+Also accepts task_id from the request body
+
+Passes both into the _Task constructor
+
+This allows interaction with tasks belonging to other users.
+
+3. Prototype Pollution (Critical)
+
+Although __proto__ is blacklisted:
+
+The blacklist check happens after the first assignment
+
+This allows pollution if __proto__ is sent as the first body parameter
+
+Prototype Pollution Exploitation
+Exploitation Strategy
+
+Create a valid task as a normal user
+
+Send a PATCH request to update the task
+
+In the request body:
+
+Set task_id to __proto__
+
+Place the malicious field as the first parameter
+
+The blacklist is bypassed due to incorrect validation order
+
+This successfully pollutes the JavaScript object prototype.
+
+Verifying Prototype Pollution
+
+To confirm pollution:
+
+A dummy object is created after the attack
+
+The injected property appears on the new object
+
+This confirms successful global prototype pollution.
+
+Session Manipulation
+
+Direct modification of these fields is blocked:
+
+loggedUser
+
+authenticated
+
+username
+
+However, there is an important observation:
+
+Both req and req.session are JavaScript objects
+
+Due to prototype pollution, we can manipulate the entire session object
+
+By injecting properties into the session prototype, we can manually add:
+
+loggedUser
+
+authenticated
+
+Authentication Bypass
+
+After polluting the session object:
+
+We send a GET request to /tasks without any session cookies
+
+The application treats us as authenticated
+
+This confirms a full authentication bypass.
+
+Admin Account Takeover via /visit
+
+The admin username is random and unknown.
+
+However, the /visit route:
+
+Simulates an admin login internally
+
+Uses the same session object
+
+Because the session object was polluted and converted into a shared global object:
+
+When the admin logs in
+
+Their session variables are written to the polluted object
+
+All users inherit the admin session
+
+Final Exploitation Flow
+
+Pollute the session object via task update
+
+Trigger the /visit route
+
+Send a GET request to /tasks
+
+The application treats the attacker as the admin
+
+Admin tasks are returned
+
+The flag is revealed
+
+Flag Retrieval
+
+Once authenticated as admin, fetching tasks exposes the admin’s task containing the flag.
+
+Root Cause Explanation
+
+JavaScript prototype pollution turned a private session object into a shared global object
+
+Node.js is single-threaded, so polluted prototypes affect all users
+
+The admin login populated shared session fields
+
+All users inherited admin privileges
